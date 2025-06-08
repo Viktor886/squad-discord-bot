@@ -14,7 +14,9 @@ SERVERS = [
 ]
 
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="/", intents=intents)
+intents.message_content = True  # ✅ Это ключевое
+bot = commands.Bot(command_prefix="!", intents=intents)  # Меняем префикс на !
+
 
 @bot.event
 async def on_ready():
