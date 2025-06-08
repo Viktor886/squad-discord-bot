@@ -1,12 +1,11 @@
-import discord
-from discord.ext import commands
-import aiohttp
 import os
+import discord
+import aiohttp
+from discord.ext import tasks
 from keep_alive import keep_alive
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-BM_TOKEN = os.getenv("BM_TOKEN")
-BM_TOKEN_FLAGS = os.getenv("BM_TOKEN_FLAGS")
+BM_TOKEN = os.getenv("BM_TOKEN_FLAGS") or os.getenv("BM_TOKEN")
 
 SERVERS = [
     "31164311",
@@ -16,16 +15,18 @@ SERVERS = [
 ]
 
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="/", intents=intents)
+client = discord.Client(intents=intents)
+tree = discord.app_commands.CommandTree(client)
 
-@bot.event
+@client.event
 async def on_ready():
-    print(f'✅ Бот запущен как {bot.user}')
+    await tree.sync()
+    print(f"✅ Бот запущен как {client.user}")
 
-@bot.command()
-async def online(ctx):
-    headers = {"Authorization": f"Bearer {BM_TOKEN_FLAGS or BM_TOKEN}"}
-    result = ""
+@tree.command(name="online", description="Показать информацию о серверах")
+async def online_command(interaction: discord.Interaction):
+    headers = {"Authorization": f"Bearer {BM_TOKEN}"}
+    server_data = []
 
     async with aiohttp.ClientSession() as session:
         for server_id in SERVERS:
@@ -33,30 +34,34 @@ async def online(ctx):
             try:
                 async with session.get(url, headers=headers) as response:
                     if response.status != 200:
-                        result += f"Ошибка при запросе сервера {server_id}\n"
+                        server_data.append(f"Ошибка при запросе сервера {server_id}")
                         continue
 
                     data = await response.json()
-                    attr = data["data"]["attributes"]
-                    name = attr["name"]
-                    players = attr["players"]
-                    max_players = attr["maxPlayers"]
-                    current_map = attr["details"].get("map", "неизвестна")
-                    next_map = attr["details"].get("nextMap", "неизвестна")
-                    queue = attr["details"].get("queue", "0")
-                    rank = attr["rank"]
+                    attributes = data["data"]["attributes"]
+                    name = attributes["name"]
+                    players = attributes["players"]
+                    max_players = attributes["maxPlayers"]
+                    current_map = attributes["details"].get("map", "неизвестна")
+                    next_map = attributes["details"].get("nextMap", "неизвестна")
+                    queue = attributes["details"].get("queue", "-")
+                    rank = attributes["rank"]
 
-                    result += (
-                        f"{name} (Рейтинг: {rank})\n"
+                    admins = ["нет админов"]  # Здесь можно улучшить, если знаем как искать админов
+
+                    block = (
+                        f"{name} (топ: {rank})\n"
                         f"Карта: {current_map} → {next_map}\n"
-                        f"Онлайн: {players}/{max_players} (Очередь: {queue})\n"
-                        f"Админы: (проверка отключена)\n"
-                        f"{'-'*20}\n"
+                        f"Онлайн: {players}/{max_players} (очередь: {queue})\n"
+                        f"Админы:\n" + "\n".join(admins) + "\n" + "—" * 16
                     )
-            except Exception as e:
-                result += f"❌ Ошибка при запросе: {e}\n"
+                    server_data.append(block)
 
-    await ctx.send(f"```\n{result}\n```")
+            except Exception as e:
+                server_data.append(f"Ошибка при запросе сервера {server_id}: {str(e)}")
+
+    result = "\n\n".join(server_data)
+    await interaction.response.send_message(f"```\n{result}\n```")
 
 keep_alive()
-bot.run(DISCORD_TOKEN)
+client.run(DISCORD_TOKEN)
