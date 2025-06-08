@@ -2,12 +2,12 @@ import discord
 from discord.ext import commands
 import aiohttp
 import os
+from keep_alive import keep_alive  # чтобы бот не отключался
 
-# Получаем токены из переменных окружения
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-BM_TOKEN_FLAGS = os.getenv("BM_TOKEN_FLAGS")  # Используем токен, который показывает админов
+BM_TOKEN = os.getenv("BM_TOKEN")
+BM_TOKEN_FLAGS = os.getenv("BM_TOKEN_FLAGS")
 
-# BattleMetrics ID ваших серверов (замени на свои)
 SERVERS = [
     "31164311",
     "31164422",
@@ -15,7 +15,6 @@ SERVERS = [
     "31162756",
 ]
 
-# Настройка бота
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
@@ -25,17 +24,16 @@ async def on_ready():
 
 @bot.command()
 async def online(ctx):
-    print("▶️ Команда /online вызвана")
-    headers = {"Authorization": f"Bearer {BM_TOKEN_FLAGS}"}
-    server_data = []
+    headers = {"Authorization": f"Bearer {BM_TOKEN_FLAGS or BM_TOKEN}"}
+    result = []
 
     async with aiohttp.ClientSession() as session:
         for server_id in SERVERS:
-            url = f"https://api.battlemetrics.com/servers/{server_id}?include=player"
             try:
+                url = f"https://api.battlemetrics.com/servers/{server_id}?include=player"
                 async with session.get(url, headers=headers) as response:
                     if response.status != 200:
-                        server_data.append(f"Ошибка при запросе сервера {server_id} (код {response.status})")
+                        result.append(f"❌ Ошибка при запросе сервера {server_id}")
                         continue
 
                     data = await response.json()
@@ -48,33 +46,31 @@ async def online(ctx):
                     queue = attributes["details"].get("queue", "-")
                     rank = attributes["rank"]
 
-                    # Получаем список админов
+                    # Получение админов
                     admins = []
-                    included_players = data.get("included", [])
-                    for player in included_players:
-                        if player.get("type") == "player":
-                            metadata = player.get("attributes", {}).get("metadata", {})
-                            if metadata.get("admin", False):
-                                admins.append(player.get("attributes", {}).get("name", "Неизвестный"))
+                    included = data.get("included", [])
+                    for player in included:
+                        meta = player.get("attributes", {}).get("metadata", {})
+                        if meta.get("admin", False):
+                            admins.append(player["attributes"].get("name", "Неизвестно"))
 
                     if not admins:
                         admins = ["нет админов"]
 
                     block = (
-                        f"{name} (позиция в топе: {rank})\n"
-                        f"Текущая карта: {current_map}\n"
-                        f"Следующая карта: {next_map}\n"
+                        f"**{name}** (топ: {rank})\n"
+                        f"Карта: {current_map} → {next_map}\n"
                         f"Онлайн: {players}/{max_players} (очередь: {queue})\n"
-                        f"Админы:\n" + "\n".join(admins) + "\n" + "—" * 16
+                        f"Админы: {', '.join(admins)}\n" + "—" * 20
                     )
-                    server_data.append(block)
-
+                    result.append(block)
             except Exception as e:
-                server_data.append(f"Ошибка при запросе сервера {server_id}:\n{str(e)}")
+                result.append(f"⚠️ Ошибка: {e}")
 
-    result = "\n\n".join(server_data)
-    await ctx.send(f"```\n{result}\n```")
+    await ctx.send("\n".join(result))
 
+# Запуск
+keep_alive()
 bot.run(DISCORD_TOKEN)
 
 
