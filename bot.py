@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import aiohttp
 import os
-from keep_alive import keep_alive  # чтобы бот не отключался
+from keep_alive import keep_alive
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 BM_TOKEN = os.getenv("BM_TOKEN")
@@ -25,52 +25,38 @@ async def on_ready():
 @bot.command()
 async def online(ctx):
     headers = {"Authorization": f"Bearer {BM_TOKEN_FLAGS or BM_TOKEN}"}
-    result = []
+    result = ""
 
     async with aiohttp.ClientSession() as session:
         for server_id in SERVERS:
+            url = f"https://api.battlemetrics.com/servers/{server_id}"
             try:
-                url = f"https://api.battlemetrics.com/servers/{server_id}?include=player"
                 async with session.get(url, headers=headers) as response:
                     if response.status != 200:
-                        result.append(f"❌ Ошибка при запросе сервера {server_id}")
+                        result += f"Ошибка при запросе сервера {server_id}\n"
                         continue
 
                     data = await response.json()
-                    attributes = data["data"]["attributes"]
-                    name = attributes["name"]
-                    players = attributes["players"]
-                    max_players = attributes["maxPlayers"]
-                    current_map = attributes["details"].get("map", "неизвестна")
-                    next_map = attributes["details"].get("nextMap", "неизвестна")
-                    queue = attributes["details"].get("queue", "-")
-                    rank = attributes["rank"]
+                    attr = data["data"]["attributes"]
+                    name = attr["name"]
+                    players = attr["players"]
+                    max_players = attr["maxPlayers"]
+                    current_map = attr["details"].get("map", "неизвестна")
+                    next_map = attr["details"].get("nextMap", "неизвестна")
+                    queue = attr["details"].get("queue", "0")
+                    rank = attr["rank"]
 
-                    # Получение админов
-                    admins = []
-                    included = data.get("included", [])
-                    for player in included:
-                        meta = player.get("attributes", {}).get("metadata", {})
-                        if meta.get("admin", False):
-                            admins.append(player["attributes"].get("name", "Неизвестно"))
-
-                    if not admins:
-                        admins = ["нет админов"]
-
-                    block = (
-                        f"**{name}** (топ: {rank})\n"
+                    result += (
+                        f"{name} (Рейтинг: {rank})\n"
                         f"Карта: {current_map} → {next_map}\n"
-                        f"Онлайн: {players}/{max_players} (очередь: {queue})\n"
-                        f"Админы: {', '.join(admins)}\n" + "—" * 20
+                        f"Онлайн: {players}/{max_players} (Очередь: {queue})\n"
+                        f"Админы: (проверка отключена)\n"
+                        f"{'-'*20}\n"
                     )
-                    result.append(block)
             except Exception as e:
-                result.append(f"⚠️ Ошибка: {e}")
+                result += f"❌ Ошибка при запросе: {e}\n"
 
-    await ctx.send("\n".join(result))
+    await ctx.send(f"```\n{result}\n```")
 
-# Запуск
 keep_alive()
 bot.run(DISCORD_TOKEN)
-
-
