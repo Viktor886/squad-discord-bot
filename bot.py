@@ -6,6 +6,7 @@ import os
 # Получаем токены из переменных окружения
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 BM_TOKEN = os.getenv("BM_TOKEN")
+BM_TOKEN_FLAGS = os.getenv("BM_TOKEN_FLAGS")
 
 # BattleMetrics ID твоих серверов (замени на свои при необходимости)
 SERVERS = [
