@@ -44,12 +44,14 @@ async def online(ctx):
                 queue = attributes["details"].get("queue", "-")
                 rank = attributes.get("rank", "неизвестен")
 
-                # Список админов через included
+                # Получаем список админов из "included"
                 admins = []
-                for item in data.get("included", []):
-                    if item["type"] == "player":
-                        if item["attributes"].get("metadata", {}).get("admin"):
-                            admins.append(item["attributes"]["name"])
+                for included in data.get("included", []):
+                    if included["type"] == "player":
+                        meta = included["attributes"].get("metadata", {})
+                        if meta.get("admin"):
+                            admins.append(included["attributes"]["name"])
+
                 if not admins:
                     admins = ["нет админов"]
 
