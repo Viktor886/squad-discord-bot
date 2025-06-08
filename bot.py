@@ -5,9 +5,9 @@ import os
 
 # Получаем токены из переменных окружения
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-BM_TOKEN = os.getenv("BM_TOKEN_FLAGS")  # Используем именно BM_TOKEN_FLAGS!
+BM_TOKEN_FLAGS = os.getenv("BM_TOKEN_FLAGS")  # Используем токен, который показывает админов
 
-# ID серверов BattleMetrics (замени на свои реальные ID)
+# BattleMetrics ID ваших серверов (замени на свои)
 SERVERS = [
     "31164311",
     "31164422",
@@ -25,7 +25,8 @@ async def on_ready():
 
 @bot.command()
 async def online(ctx):
-    headers = {"Authorization": f"Bearer {BM_TOKEN}"}
+    print("▶️ Команда /online вызвана")
+    headers = {"Authorization": f"Bearer {BM_TOKEN_FLAGS}"}
     server_data = []
 
     async with aiohttp.ClientSession() as session:
@@ -34,8 +35,7 @@ async def online(ctx):
             try:
                 async with session.get(url, headers=headers) as response:
                     if response.status != 200:
-                        print(f"❌ Ошибка при запросе сервера {server_id} — статус: {response.status}")
-                        server_data.append(f"Ошибка при запросе сервера {server_id}")
+                        server_data.append(f"Ошибка при запросе сервера {server_id} (код {response.status})")
                         continue
 
                     data = await response.json()
@@ -48,11 +48,15 @@ async def online(ctx):
                     queue = attributes["details"].get("queue", "-")
                     rank = attributes["rank"]
 
-                    # Получаем список админов из playersList
+                    # Получаем список админов
                     admins = []
-                    for player in attributes.get("playersList", []):
-                        if player.get("metadata", {}).get("admin"):
-                            admins.append(player["name"])
+                    included_players = data.get("included", [])
+                    for player in included_players:
+                        if player.get("type") == "player":
+                            metadata = player.get("attributes", {}).get("metadata", {})
+                            if metadata.get("admin", False):
+                                admins.append(player.get("attributes", {}).get("name", "Неизвестный"))
+
                     if not admins:
                         admins = ["нет админов"]
 
@@ -60,18 +64,17 @@ async def online(ctx):
                         f"{name} (позиция в топе: {rank})\n"
                         f"Текущая карта: {current_map}\n"
                         f"Следующая карта: {next_map}\n"
-                        f"Онлайн: {players} (очередь: {queue})\n"
+                        f"Онлайн: {players}/{max_players} (очередь: {queue})\n"
                         f"Админы:\n" + "\n".join(admins) + "\n" + "—" * 16
                     )
                     server_data.append(block)
+
             except Exception as e:
-                print(f"⚠️ Ошибка при обработке сервера {server_id}: {e}")
-                server_data.append(f"⚠️ Ошибка при обработке сервера {server_id}")
+                server_data.append(f"Ошибка при запросе сервера {server_id}:\n{str(e)}")
 
     result = "\n\n".join(server_data)
     await ctx.send(f"```\n{result}\n```")
 
 bot.run(DISCORD_TOKEN)
-
 
 
